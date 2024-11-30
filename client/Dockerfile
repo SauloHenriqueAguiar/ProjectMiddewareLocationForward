@@ -1,13 +1,15 @@
-# Dockerfile
-FROM golang:1.20
+# Use uma imagem Go base
+FROM golang:1.21-alpine as builder
 
+# Setando o diretório de trabalho
 WORKDIR /app
 
-COPY go.mod go.sum ./
-RUN go mod download
-
+# Copiar os arquivos do Go para o container
 COPY . .
 
-RUN go build -o client
+# Baixar dependências e compilar o projeto
+RUN go mod tidy
+RUN go build -o client ./client.go
 
+# Rodar a aplicação
 CMD ["./client"]

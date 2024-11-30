@@ -3,36 +3,46 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
+	"os"
+	"time"
 )
 
+// Unmarshaller é responsável por desserializar dados.
 type Unmarshaller struct{}
 
-// Método para deserializar os dados
 func (u *Unmarshaller) Unmarshal(data []byte, v interface{}) error {
 	return json.Unmarshal(data, v)
 }
 
+// ServerRequestHandler lida com as requisições recebidas.
 type ServerRequestHandler struct {
-	unmarshaller *Unmarshaller
+	unmarshaller    *Unmarshaller
+	redirectEnabled bool
+	newAddress      string
 }
 
-// Método para lidar com as requisições recebidas
+// HandleRequest processa a requisição ou redireciona se configurado.
 func (h *ServerRequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) {
+	if h.redirectEnabled {
+		// Retorna o redirecionamento com o novo endereço
+		log.Printf("Redirecting request to new address: %s", h.newAddress)
+		w.Header().Set("Location", h.newAddress)
+		http.Error(w, "Server moved", http.StatusMovedPermanently)
+		return
+	}
 
 	// Lê o corpo da requisição
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("error reading request body: %v", err), http.StatusBadRequest)
 		return
 	}
 
-	// Exibe a mensagem recebida no servidor
 	log.Printf("Server received request: %s", body)
 
-	// Desserializa o payload recebido
 	var payload map[string]interface{}
 	err = h.unmarshaller.Unmarshal(body, &payload)
 	if err != nil {
@@ -40,16 +50,13 @@ func (h *ServerRequestHandler) HandleRequest(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Verificação de que o payload foi recebido e processado corretamente
 	log.Printf("Server processed request, payload: %+v", payload)
 
-	// Cria a resposta
+	// Cria e retorna a resposta
 	response := map[string]interface{}{
 		"status":  "success",
 		"payload": payload,
 	}
-
-	// Retorna a resposta para o cliente
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, fmt.Sprintf("error encoding response: %v", err), http.StatusInternalServerError)
@@ -57,17 +64,36 @@ func (h *ServerRequestHandler) HandleRequest(w http.ResponseWriter, r *http.Requ
 }
 
 func main() {
-
 	unmarshaller := &Unmarshaller{}
-	handler := &ServerRequestHandler{unmarshaller: unmarshaller}
+	redirectEnabled := false
+	newAddress := os.Getenv("NEW_SERVER_ADDRESS") // Defina o novo endereço via variável de ambiente
 
-	// Configura o servidor HTTP
+	if newAddress != "" {
+		redirectEnabled = true
+	}
+
+	handler := &ServerRequestHandler{
+		unmarshaller:    unmarshaller,
+		redirectEnabled: redirectEnabled,
+		newAddress:      newAddress,
+	}
+
 	http.HandleFunc("/process", handler.HandleRequest)
-	fmt.Println("Server is running on port 8081...")
+	port := "8081"
+	log.Printf("Server is running on port %s...", port)
 
-	// Inicia o servidor
-	err := http.ListenAndServe(":8081", nil)
+	go func() {
+		if redirectEnabled {
+			// Simula migração após 30 segundos (para testes)
+			time.Sleep(30 * time.Second)
+			handler.redirectEnabled = true
+			handler.newAddress = "http://new-server:8081/process"
+			log.Println("Server is now redirecting requests.")
+		}
+	}()
+
+	err := http.ListenAndServe(":"+port, nil)
 	if err != nil {
-		fmt.Printf("Error starting server: %v\n", err)
+		log.Fatalf("Error starting server: %v", err)
 	}
 }

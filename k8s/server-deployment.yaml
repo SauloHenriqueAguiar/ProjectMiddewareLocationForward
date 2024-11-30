@@ -14,7 +14,8 @@ spec:
     spec:
       containers:
       - name: server
-        image: server:latest
+        image: <your-docker-repo>/server:latest
         ports:
         - containerPort: 8081
+
 
