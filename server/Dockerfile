@@ -1,23 +1,13 @@
-# Use the official Golang image as the base image
-FROM golang:1.20-alpine
+# Dockerfile
+FROM golang:1.20
 
-# Set the working directory inside the container
 WORKDIR /app
 
-# Copy the Go module files
 COPY go.mod go.sum ./
+RUN go mod download
 
-# Download the Go dependencies
-RUN go mod tidy
-
-# Copy the rest of the application code
 COPY . .
 
-# Build the Go application
-RUN go build -o server .
+RUN go build -o server
 
-# Expose the port the server will use
-EXPOSE 8082
-
-# Run the application
 CMD ["./server"]
